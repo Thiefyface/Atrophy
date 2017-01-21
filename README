@@ -1,0 +1,8 @@
+A x86/x64 Linux debugger utilizing PTRACE. 
+
+Written in Python stdlib (<3 portability), with extensions Keystone/Capstone/Unicorn Engine.
+
+***WARNING*** there's alot of features not working (Snapshots,signal handling,multithreading).
+
+[^_^]
+
