@@ -157,10 +157,19 @@ stop - Stop the program (useful with desync)
 sys - continue execution till syscall entry or exit
 c - continue
 si - stepInstruction
+------------------------ Emulator Control ------------------------
+*** Note: Emu Starts from RIP initially, but once initiallized, it will keep state, unless reverted to another context
+*** Also note, when Emu first starts, state is saved in "init" save slot (e.g. `lemu init`)
+emu <#ofInstr(n)> - Emulate [n] bytes in emu.
+semu <slot> - Save current emu context to a save slot
+lemu <slot> - load current emu context from a save slot
 ------------------------ Assorted Cmd ------------------------
 clear - clear screen
------------------------- Signal stuff ------------------------
+hist <len> - Atrophy history, last $len entries
+------------------------ Experimental stuff ------------------------
 lisg - list signal handlers
 handle <signal> <action> - Add handler for signal.
 sig <signal> - Send signal to prog (desync?)
+save <savename> - Save a snapshot of the process
+load <savename> - Load from a snapshot
 """   

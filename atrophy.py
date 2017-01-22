@@ -187,7 +187,7 @@ class Atrophy(object):
                      "b":self.setBreak,
                      "lb":self.listBreak,
                      "db":self.delBreak,
-                     "sw":self.switchThread, 
+                     "sw":self.switchThread, # not implemented yet 
                      "clear":self.clear,
                      "si":self.stepInstruction,
                      "dis":self.pp_disassemble,
@@ -198,21 +198,27 @@ class Atrophy(object):
                      "sec":self.getSections,
                      "sym":self.getSymbols, 
                      "fb":self.findBytes,
+                     # under development/experimental #
                      "sb":self.saveBytes,
                      "shb":self.showSavedBytes,
-                     "handle":self.addSigHandler,
-                     "lsig":self.listSigAction,
-                     "sig":self.sendSig,
-                     "desync":self.toggleDesync,
+                     "handle":self.addSigHandler,     
+                     "lsig":self.listSigAction,       
+                     "sig":self.sendSig,              
+                     "desync":self.toggleDesync,      #
+                     ################################## 
                      "stack":self.printStack,
+                     # Snapshot stuff. (doesn't really work...)
                      "save":self.save,
                      "load":self.load,
                      "listSaves":self.listSavepoints,
                      "info":self.summaryInfo,
+                     # emulator commands
                      "emu":self.emulate,
                      "remu":self.restart_emu,
                      "lemu":self.load_emu_context,
                      "semu":self.save_emu_context,
+                     # 
+                     "hist":self.print_history,
         }
 
         self.completer = AtrophyCompleter(self.cmd_dict.keys())
@@ -845,10 +851,13 @@ class Atrophy(object):
 
 ##########################        
 
+    def print_history(self,count=0):
+        buf = self.completer.print_history(int(count))
+        print buf
 
+
+##########################        
 # END Atrophy commands
-
-
 ##########################        
     def get_input(self,sock):
         if sock == None:

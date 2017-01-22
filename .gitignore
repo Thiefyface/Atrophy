@@ -4,3 +4,4 @@ defines/*.pyc
 *.swo
 external/capstone-3.0.4
 external/keystone-0.9.1
+.atrophy-history

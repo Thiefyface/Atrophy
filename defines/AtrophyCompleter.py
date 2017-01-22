@@ -1,6 +1,11 @@
 import glob
 import readline
 import rlcompleter
+import atexit
+
+HISTLEN = 200
+HISTFILE = ".atrophy-history"
+DEFAULT_HIST_DISPLAY_LEN = 20
 
 class AtrophyCompleter(rlcompleter.Completer):
      def __init__(self,cmdcomplete):
@@ -9,6 +14,8 @@ class AtrophyCompleter(rlcompleter.Completer):
         self.cmdcomplete = cmdcomplete
         self.symbols = []
         self.index = 0
+    
+        self.last_run_start = -1
 
         self.delims = readline.get_completer_delims()
         readline.set_completer_delims(self.delims.replace("/",''))
@@ -19,6 +26,34 @@ class AtrophyCompleter(rlcompleter.Completer):
         readline.parse_and_bind('tab: complete')
         readline.set_completer(self.complete)
 
+        readline.set_history_length(HISTLEN)
+        try:
+            readline.read_history_file(HISTFILE)
+        except Exception as e:
+            pass  
+
+        atexit.register(self.on_exit)
+
+     def on_exit(self):
+        # append 'run'/'attach' to end for convieniance
+        for i in range(readline.get_current_history_length(),0,-1):
+            line = readline.get_history_item(i)
+            if line.startswith("run") or line.startswith("attach"): 
+                readline.add_history(line) 
+                self.last_run_start = (readline.get_current_history_length() - i)
+                break
+        readline.write_history_file(HISTFILE)
+        
+     def print_history(self,count=0):
+        buf = ""
+        length = readline.get_current_history_length()
+        if count == 0:
+            count = DEFAULT_HIST_DISPLAY_LEN
+        for i in range(length,length-count,-1):
+            buf += readline.get_history_item(i)
+            buf += "\n"
+        return buf
+    
      def addSymbols(self,symbols):
         for i in symbols:
             try:
