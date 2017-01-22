@@ -37,13 +37,12 @@ class EmuUtil():
         self.uc_arch = UC_ARCH_X86
         self.uc_mode += UC_MODE_LITTLE_ENDIAN
         self.uni = Uc(self.uc_arch,self.uc_mode) 
+        self.uni_dict = {} # translations from "reg" -> UC_X86_REG_*
 
-        self.Standalone = False # for testing purposes
+
         self.comms_sock = None
-        
-        self.init_uni_state = None
-
         self.context_dict = {}
+        
         
          
     def getEmuRegs(self,pid=0,regStruct=None):
@@ -61,13 +60,13 @@ class EmuUtil():
         if not regStruct:
             regStruct = RegisterStruct() 
 
-        uni_dict = regStruct.get_uni_regs()
+        self.uni_dict = regStruct.get_uni_regs()
         for reg in regStruct.display_order:
             try:
-                uni_reg = self.uni.reg_read(uni_dict[reg]) 
+                uni_reg = self.uni.reg_read(self.uni_dict[reg]) 
                 regStruct.set_register(reg,uni_reg) 
-                #self.output("[>.>] Writing 0x%x to %s" % (uni_reg,reg))
-            except:
+            except Exception as e:
+                #print e
                 pass
           
         return regStruct 
@@ -192,26 +191,6 @@ class EmuUtil():
                 self.output(ERROR(e)) 
                 return self.getAtrophyRegs() 
 
-                
-       
-
-    '''
-    def startEmulatorStandalone(self):
-        self.addHooks()
-
-        try:
-            raw_input("[^.^] Press enter to start emulator")
-            self.uni.emu_start(start_addr,-1)
-        except KeyboardInterrupt:
-            self.output(GOOD("Exiting!"))
-
-        #
-        #self.enterStandaloneMode() 
-    '''
-         
-
-
-
     def block_hook(self,emulator,address,block_size,user_data):
         self.output("Basic Block: 0x%x-0x%x" % (address,address+block_size))
         #print "userdata: %s" % repr(user_data)
@@ -307,6 +286,29 @@ class EmuUtil():
             self.context_dict[context_str] = self.uni.context_save()
         self.output("[s.s] Content %s Saved" % context_str)
 
+    def get_reg(self,reg):
+        if not len(self.uni_dict):
+            self.uni_dict = self.regStruct.get_uni_regs()
+        return self.uni.reg_read(self.uni_dict[reg]) 
+         
+    def set_reg(self,reg,value):
+        value = get_int(value)
+        if not len(self.uni_dict):
+            self.uni_dict = self.regStruct.get_uni_regs()
+        self.uni.reg_write(self.uni_dict[reg],value)
+    
+    # return in reverse (since little endian)
+    def get_mem(self,address,length):
+        address = get_int(address)
+        length = get_int(length)
+        return self.uni.mem_read(address,length) 
+
+    # reverse for little endian
+    def set_mem(self,address,bytestr):
+        address = get_int(address)
+        bytestr = bytes(bytestr[::-1])
+        return self.uni.mem_write(address,bytestr)
+
     # If I knew what I was doing, this would
     # not have to be redefined. 
     # print or send over socket
@@ -319,4 +321,17 @@ class EmuUtil():
         else:
             stdout.write(msg)
             stdout.flush()
+
+
+
+
+def get_int(value):
+    try:
+        val = int(value)
+    except ValueError:
+        val = int(value,16)
+    except:
+        raise 
+    return val
+
 

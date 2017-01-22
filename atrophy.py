@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # Atrophy Debugger
-# Created by Lilith Wyatt <(^.^)> 
+# Created/Copyright Lilith Wyatt <(^.^)> 
 # BSD Licensing 
 import re
 import os
@@ -35,8 +35,6 @@ except Exception as e:
     print e
     print WARN("Emulation utils disabled")
 
-
-
 ### TODO:
 #  - Complete Threading Support (oh god why)
 #  - Make savepoints more reliable ( lol, Executing loop: { )
@@ -51,6 +49,7 @@ except Exception as e:
 # 64-Bit issues
 #  - x64 backtrace 
 # Feature Wishlist
+#  - string dereferencing (ala radare2)
 #  - More info in disassembly 
 #  - - addr resolution from last sym
 #  - - relative to 'rip' resolution 
@@ -58,9 +57,9 @@ except Exception as e:
 #  - Heap dumping
 #  - Rop gadgets
 #  - Auto-attach/monitor via process name (e.g. telnetd)
-#  - add trap so that if atrophy dies, process continues (atexit?)
 #  - start thinking about hooking certain calls
 #  - - Syscalls especially
+#  -- 'dt' from windbg....
 # Command Wishlist
 #  - "copy"/"paste" command - save X bytes at addr Y (clipboard essentially)
 #  - "restart" command - reload prog/etc
@@ -217,6 +216,11 @@ class Atrophy(object):
                      "remu":self.restart_emu,
                      "lemu":self.load_emu_context,
                      "semu":self.save_emu_context,
+                     # emulator control (regs/mem)
+                     "gde":self.get_emu_mem,
+                     "sde":self.set_emu_mem,
+                     "gre":self.get_emu_reg,
+                     "sre":self.set_emu_reg,
                      # 
                      "hist":self.print_history,
         }
@@ -842,6 +846,42 @@ class Atrophy(object):
         self.EmuUtil.save_emu_context(name)
 ##########################        
 
+    def get_emu_mem(self,address,length=16):
+        addr = self.filter_val(address)
+        return self.EmuUtil.get_mem(addr,length)
+
+    def set_emu_mem(self,address,value):
+        addr = self.filter_val(address)
+        value = self.filter_val(value)
+        self.EmuUtil.set_mem(addr,value)
+
+    def get_emu_reg(self,registers="*"):
+        emu_regs = self.EmuUtil.getAtrophyRegs()
+        ret_buf = ""
+
+        if registers == "*":
+            disp_queue = emu_regs.display_order
+        else:
+            disp_queue = filter(None,registers.split(" "))
+
+        if emu_regs:
+            for reg in disp_queue: 
+                try:
+                    addr = self.filter_addr(getattr(emu_regs,reg))
+                    #print addr
+                    deref = self.derefChain(addr)
+                    #print deref
+                except Exception as e:
+                    print str(e)
+                    break
+
+                ret_buf += reg_format(reg,addr,deref) + "\n" 
+        else:
+            self.output(WARN("Could nto get Emulator's registers"))
+        self.output(ret_buf)
+
+    def set_emu_reg(self,register,value):
+        self.EmuUtil.set_reg(register,value)
 
 
 ##########################        
