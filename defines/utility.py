@@ -158,11 +158,12 @@ sys - continue execution till syscall entry or exit
 c - continue
 si - stepInstruction
 ------------------------ Emulator Control ------------------------
-*** Note: Emu Starts from RIP initially, but once initiallized, it will keep state, unless reverted to another context
-*** Also note, when Emu first starts, state is saved in "init" save slot (e.g. `lemu init`)
+*** Note: On first emu run, state is stored in `init` context ***
 emu <#ofInstr(n)> - Emulate [n] bytes in emu.
 semu <slot> - Save current emu context to a save slot
 lemu <slot> - load current emu context from a save slot
+sde/gde - Save/Get Data Emu (== sd/gd but inside emu)
+sre/gre - Save/Get Reg Emu (== gr/sr but inside emu)
 ------------------------ Assorted Cmd ------------------------
 clear - clear screen
 hist <len> - Atrophy history, last $len entries

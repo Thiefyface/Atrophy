@@ -3,9 +3,6 @@ import readline
 import rlcompleter
 import atexit
 
-HISTLEN = 200
-HISTFILE = ".atrophy-history"
-DEFAULT_HIST_DISPLAY_LEN = 20
 
 class AtrophyCompleter(rlcompleter.Completer):
      def __init__(self,cmdcomplete):
@@ -14,8 +11,11 @@ class AtrophyCompleter(rlcompleter.Completer):
         self.cmdcomplete = cmdcomplete
         self.symbols = []
         self.index = 0
-    
         self.last_run_start = -1
+
+        self.HISTLEN = 200
+        self.HISTFILE = ".atrophy-history"
+        self.DEFAULT_HIST_DISPLAY_LEN = 20
 
         self.delims = readline.get_completer_delims()
         readline.set_completer_delims(self.delims.replace("/",''))
@@ -26,29 +26,36 @@ class AtrophyCompleter(rlcompleter.Completer):
         readline.parse_and_bind('tab: complete')
         readline.set_completer(self.complete)
 
-        readline.set_history_length(HISTLEN)
+        readline.set_history_length(self.HISTLEN)
         try:
-            readline.read_history_file(HISTFILE)
+            readline.read_history_file(self.HISTFILE)
         except Exception as e:
             pass  
 
-        atexit.register(self.on_exit)
+        atexit.register(self.on_exit,self.HISTFILE)
 
-     def on_exit(self):
-        # append 'run'/'attach' to end for convieniance
-        for i in range(readline.get_current_history_length(),0,-1):
+     def on_exit(self,histfile):
+        # append last 'run'/'attach' to end for convieniance
+        length = readline.get_current_history_length()
+
+        for i in range(length,0,-1):
             line = readline.get_history_item(i)
             if line.startswith("run") or line.startswith("attach"): 
                 readline.add_history(line) 
-                self.last_run_start = (readline.get_current_history_length() - i)
+                self.last_run_start = (length - i)
                 break
-        readline.write_history_file(HISTFILE)
+        
+        bottom_limit = length-(self.HISTLEN)+1
+        for i in range(0,bottom_limit):
+            readline.remove_history_item(i)
+           
+        readline.write_history_file(histfile)
         
      def print_history(self,count=0):
         buf = ""
         length = readline.get_current_history_length()
         if count == 0:
-            count = DEFAULT_HIST_DISPLAY_LEN
+            count = self.DEFAULT_HIST_DISPLAY_LEN
         for i in range(length,length-count,-1):
             buf += readline.get_history_item(i)
             buf += "\n"
