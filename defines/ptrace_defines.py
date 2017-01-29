@@ -213,10 +213,7 @@ def disasm_format(dis_list):
         addr,mnem,op,byteStr = instr
         buf += "%s0x%x: " % (GREEN,addr)
         buf += "%s%s " % (YELLOW,mnem)
-        buf += "%s%s%s " % (CYAN,op,PURPLE) 
-        fmt_str = "{0:>%d}"%(int(columns)-(20+len(op)+len(mnem)))
-        tmp_buf = "\\x" + '\\x'.join("%02x"%b for b in byteStr) 
-        buf += fmt_str.format(tmp_buf)
+        buf += "%s%s" % (CYAN,op) 
         buf += "\n"
     return buf
 

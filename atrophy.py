@@ -731,11 +731,10 @@ class Atrophy(object):
         while True:
             # grab 32 bytes at a time
             tmp = bytes(self.getMem(addr,count=32,quiet=False)) 
-            disasm_list += self.AsmUtil.disassemble(tmp,addr) 
-           
-            if len(disasm_list) < 32:
-                break
-        
+            tmp_dis = self.AsmUtil.disassemble(tmp,addr) 
+            
+            disasm_list += tmp_dis
+
             if count <= len(disasm_list):
                 disasm_list = disasm_list[:count] 
                 break
@@ -760,7 +759,7 @@ class Atrophy(object):
         return disasm_list
 
 
-    def pp_disassemble(self,addr=None,count=10):
+    def pp_disassemble(self,count=10,addr=None):
         if not self.AsmUtil:
             self.output(WARN("Asm Utils disabled. Keystone/capstone installed?"))
             return
@@ -784,8 +783,12 @@ class Atrophy(object):
         except:
             _,sym,off = self.findNearestSymbol(disasm_list[0][0],reloc=False)
 
-        self.output(INFO("<%s+0x%x>"%(sym,off)))
+        # Don't bother if it's pretty far away
+        if off < 0x100000:
+            self.output(INFO("<%s+0x%x>"%(sym,off)))
+
         self.output(disasm_format(disasm_list)+"\n") 
+
 
 ##########################        
 
@@ -1005,8 +1008,10 @@ class Atrophy(object):
                         #self.output(WARN("Invalid args for cmd %s: %s" % (cmd,str(args))))
                 else:
                     #! For debugging
-                    #ret = self.cmd_dict[cmd]()
+                    # print "executing without 'try'"  
+                    # ret = self.cmd_dict[cmd]()
                     try:
+                        
                         ret = self.cmd_dict[cmd]()
                     except Exception as e:
                         self.output(str(e) + ":389")
@@ -1056,11 +1061,10 @@ class Atrophy(object):
                 inp_pid = self.debug_pid
             pid = libc.waitpid(inp_pid,byref(self.status),option)
      
-            
             #Examine signal
             #######EXITED
             if os.WIFEXITED(self.status.value):
-                self.output(ERROR("Child ded instead..."))
+                self.output(ERROR("Child died."))
                 self._clean_up()
 
                 if os.WIFSIGNALED(self.status.value):
@@ -1546,7 +1550,9 @@ class Atrophy(object):
 
     def getSymbols(self,queryStr=""):
         
-        self.output("ASL Base:   %s0x%x%s"%(GREEN,self.proc_map.base_relocation,CLEAR))
+        if self.proc_map.base_relocation > 0x400000:
+            self.output("ASL Base:   %s0x%x%s"%(GREEN,self.proc_map.base_relocation,CLEAR))
+        
         if queryStr:
             queryStr = queryStr.upper() 
 
