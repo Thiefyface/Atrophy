@@ -50,9 +50,6 @@ except Exception as e:
 #  - x64 backtrace 
 # Feature Wishlist
 #  - string dereferencing (ala radare2)
-#  - More info in disassembly 
-#  - - addr resolution from last sym
-#  - - relative to 'rip' resolution 
 #  - Hardware/Guard breaks
 #  - Heap dumping
 #  - Rop gadgets
@@ -63,7 +60,9 @@ except Exception as e:
 # Command Wishlist
 #  - "copy"/"paste" command - save X bytes at addr Y (clipboard essentially)
 #  - "restart" command - reload prog/etc
-#  - "code" command - once disassembly added, give code context
+# Emulator Issues:
+#  - Restoring memory along with register context
+#  - Make the emulator commands print useful info
 ###
 
 class Atrophy(object):
@@ -223,6 +222,9 @@ class Atrophy(object):
                      "sre":self.set_emu_reg,
                      # 
                      "hist":self.print_history,
+                     "#":self.add_comment,
+                     "//":self.add_comment,
+                     "dc":self.del_comment,
         }
 
         self.completer = AtrophyCompleter(self.cmd_dict.keys())
@@ -894,6 +896,48 @@ class Atrophy(object):
 
 ##########################        
 
+    # add comment that can be viewed when disassembling
+    # by default adds to address $PC.
+    def add_comment(self,*comment):
+        ##    
+        addr = None
+        comment_buff = "" 
+        for i in range(0,len(comment)):
+            if i == len(comment)-1 and len(comment) > 1: ## see if it's an address or not
+                try:
+                    addr = "0x%x" % self.filter_addr(comment[i])
+                    
+                except Exception as e:
+                    comment_buff+=comment[i]
+                    addr = None
+                    print e
+            else:
+                comment_buff+=comment[i] + " "
+                #print comment_buff
+
+        if not addr:
+            t = self.current_thread
+            addr = "0x%x" % t.regStruct.get_register(self.instr_reg)
+            
+        formatted_comment = "%s #%s" % (ORANGE,comment_buff)
+        self.AsmUtil.comment_add(addr,formatted_comment) 
+        self.output("Added comment '%s' to %s" % (comment_buff,addr))
+
+##########################        
+
+    # delete comment at address, by default deletes at $PC
+    def del_comment(self,address=None,index=-1):
+        if address:
+            addr = "0x%x" % self.filter_addr(address)
+        else:
+            t = self.current_thread
+            addr = "0x%x" % t.regStruct.get_register(self.instr_reg)
+
+        self.AsmUtil.comment_del(addr)
+        self.output("Deleted comment@%s"%addr)
+
+##########################        
+
     def print_history(self,count=0):
         buf = self.completer.print_history(int(count))
         print buf
@@ -1552,6 +1596,7 @@ class Atrophy(object):
         
         if self.proc_map.base_relocation > 0x400000:
             self.output("ASL Base:   %s0x%x%s"%(GREEN,self.proc_map.base_relocation,CLEAR))
+            
         
         if queryStr:
             queryStr = queryStr.upper() 
@@ -1562,21 +1607,21 @@ class Atrophy(object):
                 if i == 0: # unresolved symbols list 
                     for unresolved in self.elf.symbol_dict[0]:
                         if queryStr in unresolved.upper():
-                            self.output("%s0x%08x:%s %s" % (CYAN,i,CLEAR,unresolved))
+                            self.output("%s0x%x:%s %s" % (CYAN,i,CLEAR,unresolved))
                         elif not queryStr:
-                            self.output("%s0x%08x:%s %s" % (CYAN,i,CLEAR,unresolved))
+                            self.output("%s0x%x:%s %s" % (CYAN,i,CLEAR,unresolved))
                 try:
                     if queryStr in str(self.elf.symbol_dict[i]).upper():
                         # CASE symbol type
-                        self.output("%s0x%08x:%s %s" % (CYAN,i,CLEAR,self.elf.symbol_dict[i][0]) )
+                        self.output("%s0x%x:%s %s" % (CYAN,i+self.proc_map.base_relocation,CLEAR,self.elf.symbol_dict[i][0]) )
                     elif not queryStr:
-                        self.output("%s0x%08x:%s %s" % (CYAN,i,CLEAR,self.elf.symbol_dict[i][0]) )
+                        self.output("%s0x%x:%s %s" % (CYAN,i+self.proc_map.base_relocation,CLEAR,self.elf.symbol_dict[i][0]) )
                     elif queryStr:
                         try:
                             if queryStr[:2] == "0X":
                                 #print self.elf.symbol_dict[i]
                                 if int(queryStr,16) == i:
-                                    self.output("%s0x%08x:%s %s" % (CYAN,i,CLEAR,self.elf.symbol_dict[i][0]) )
+                                    self.output("%s0x%08x:%s %s" % (CYAN,i+self.proc_map.base_relocation,CLEAR,self.elf.symbol_dict[i][0]) )
                         except:
                             pass
                 except Exception as e:
@@ -1875,10 +1920,4 @@ if __name__ == "__main__":
         print str(e) + ":418"
 
     a.sendCommand(loop=True)
-
-
-#!
-#    fu = UniFactory()
-#    fu.initEmulator()
-    
 
