@@ -49,7 +49,7 @@ except Exception as e:
 # 64-Bit issues
 #  - x64 backtrace 
 # Feature Wishlist
-#  - string dereferencing (ala radare2)
+#  - string dereferencing 
 #  - Hardware/Guard breaks
 #  - Heap dumping
 #  - Rop gadgets
@@ -225,6 +225,9 @@ class Atrophy(object):
                      "#":self.add_comment,
                      "//":self.add_comment,
                      "dc":self.del_comment,
+                     "sp":self.save_project,
+                     "lp":self.load_project,
+                     "#!":self.ignore_line,
         }
 
         self.completer = AtrophyCompleter(self.cmd_dict.keys())
@@ -895,6 +898,10 @@ class Atrophy(object):
         self.output(INFO("Switching current thread to PID:%d" % self.current_thread.pid))
 
 ##########################        
+## For comments in history ## 
+    def ignore_line(self,*_):
+        pass 
+##########################        
 
     # add comment that can be viewed when disassembling
     # by default adds to address $PC.
@@ -939,8 +946,19 @@ class Atrophy(object):
 ##########################        
 
     def print_history(self,count=0):
-        buf = self.completer.print_history(int(count))
-        print buf
+        buff = self.completer.print_history(int(count))
+        self.output(buff)
+
+##########################        
+    def save_project(self,proj_name):
+        self.completer.save_project(proj_name)
+        self.output(GOOD("Saved project %s" % proj_name))
+
+    def load_project(self,proj_name):
+        proj_buff = self.completer.load_project(proj_name)
+        for cmd in proj_buff.split('\n'):
+            self.sendCommand(cmd)
+        self.output(GOOD("Loaded project %s"%proj_name))
 
 
 ##########################        

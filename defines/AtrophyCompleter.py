@@ -13,6 +13,8 @@ class AtrophyCompleter(rlcompleter.Completer):
         self.index = 0
         self.last_run_start = -1
 
+        self.session_delim = "#! Session Started !#"
+
         self.HISTLEN = 200
         self.HISTFILE = ".atrophy-history"
         self.DEFAULT_HIST_DISPLAY_LEN = 20
@@ -26,11 +28,17 @@ class AtrophyCompleter(rlcompleter.Completer):
         readline.parse_and_bind('tab: complete')
         readline.set_completer(self.complete)
 
+        # persistant commands that actually affect a session 
+        # (e.g. breakpoints, mem writes, comments)
+        self.project_cmds = [ "sd", "b", "db", "sb","#", "//" ]
+
         readline.set_history_length(self.HISTLEN)
         try:
             readline.read_history_file(self.HISTFILE)
+            readline.add_history(self.session_delim)
+            readline.write_history_file(histfile)
         except Exception as e:
-            pass  
+            pass
 
         atexit.register(self.on_exit,self.HISTFILE)
 
@@ -56,9 +64,12 @@ class AtrophyCompleter(rlcompleter.Completer):
         length = readline.get_current_history_length()
         if count == 0:
             count = self.DEFAULT_HIST_DISPLAY_LEN
-        for i in range(length,length-count,-1):
-            buf += readline.get_history_item(i)
-            buf += "\n"
+
+        for i in range(length-count,length):
+            tmp = readline.get_history_item(i)
+            if tmp:
+                buf += tmp
+                buf += "\n"
         return buf
     
      def addSymbols(self,symbols):
@@ -91,3 +102,60 @@ class AtrophyCompleter(rlcompleter.Completer):
             return self.matches[index]
         except:
             return None
+
+
+     def save_project(self,proj_name):
+        session_index = 0 
+        length = readline.get_current_history_length()
+        
+        project_file = ".atrophy-project-%s" % proj_name
+        project_buff = ""
+
+        try:
+            # same directory
+            with open(project_file,"r") as f:
+                project_buff = f.read()
+        except:
+            # project == full path???
+            try:   
+                with open(proj_name,"r") as f:
+                    project_buff = f.read()
+                project_file = proj_name
+            except: ## no file found
+                pass  
+            
+        for i in range(length,0,-1):
+            buf = readline.get_history_item(i)
+
+            if buf == self.session_delim:
+                session_index = length - i 
+                break
+
+            if buf:
+                cmd = buf.split(" ")[0]
+            if cmd in self.project_cmds:
+                project_buff += buf
+                project_buff += "\n" 
+
+        with open(project_file,"w") as f:
+            f.write(project_buff) 
+    
+     def load_project(self,proj_name):
+         project_file = ".atrophy-project-%s" % proj_name
+         project_buff = ""
+
+         try:
+            # same directory
+            with open(project_file,"r") as f:
+                project_buff = f.read()
+         except:
+            # project == full path???
+            try:   
+                with open(proj_name,"r") as f:
+                    project_buff = f.read()
+                project_file = proj_name
+            except: ## no file found
+                pass  
+
+         return project_buff
+
