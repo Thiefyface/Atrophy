@@ -143,6 +143,10 @@ asm - assemble "instr1; instr2"
 bt - backtrace (x86 only for now)
 shb - shows Byte Strings saved by 'dis','asm',and 'sb'
 sb - saveBytes <label> <bytes> - save bytes into variable.  
+------------------------  Comments  ------------------------
+// - comment_add <comment string...> <address>
+# - comment_add <comment string...> <address>
+dc - delete_comment <address> 
 ------------------------ Program info ------------------------
 sym - <OBJECT|FUNCTION> - listSymbols
 sec - listSections
