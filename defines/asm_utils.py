@@ -134,7 +134,7 @@ class AsmUtil():
                              self.rip_rel_calc(instr.address,instr.op_str[ind:]), \
                              prepend=True)
             
-    # address == string
+    # ****** address needs to be a string ******
     def comment_add(self,address,content,prepend=False): 
         if not content or not address:
             return
@@ -148,6 +148,17 @@ class AsmUtil():
         except KeyError:
             self.comments[address] = [content,] 
         
+
+    # ****** address needs to be a string ******
+    def comment_del(self,address,index=-1): 
+        if not address:
+            return
+        try:
+            self.comments[address].pop()
+        except:
+            pass
+                
+
                  
     # Samples:
     # eax, dword ptr [rip + 0x221fc7] 
