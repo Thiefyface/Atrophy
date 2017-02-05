@@ -98,8 +98,11 @@ class Atrophy(object):
         # since this relies on capstone/keystone/unicorn
         self.AsmUtil = False
         self.EmuUtil = False
+
         try:
             self.AsmUtil = AsmUtil() 
+            self.AsmUtil.share_functions(self.getString,self.getMem,self.getRegs)
+            
         except Exception as e:
             self.output(str(e))
             self.output("Could not load Capstone/Keystone, Certain features disabled")
@@ -109,7 +112,6 @@ class Atrophy(object):
         except Exception as e:
             self.output(str(e))
             self.output("Could not load Unicorn Engine, Emulation features disabled")
-            pass
         
 
         if maxsize < 2**32:

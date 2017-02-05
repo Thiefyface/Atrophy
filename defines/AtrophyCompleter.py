@@ -14,7 +14,7 @@ class AtrophyCompleter(rlcompleter.Completer):
 
         self.session_delim = "#! Session Started !#"
 
-        self.HISTLEN = 200
+        self.HISTLEN = 2000
         self.HISTFILE = ".atrophy-history"
         self.DEFAULT_HIST_DISPLAY_LEN = 20
 
@@ -61,8 +61,12 @@ class AtrophyCompleter(rlcompleter.Completer):
         readline.clear_history()
 
         for i in range(1,self.HISTLEN-1):
-            line = tmp[i]
+            try:
+                line = tmp[i]
+            except:
+                break
             readline.add_history(line)
+
             if line.startswith("run") or line.startswith("attach"): 
                 last_run = line 
               
