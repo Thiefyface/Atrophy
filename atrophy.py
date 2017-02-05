@@ -77,6 +77,7 @@ class Atrophy(object):
         self.proc_map = None
         self.traceme_flag = False
         self.elf = None
+        self.completer = None
 
 
         ## Comms variables
@@ -271,8 +272,15 @@ class Atrophy(object):
 
         #parent thread
         elif pid > 0:
+            if self.elf:
+                del self.elf
             self.elf = ELF(*parse_elf(full_path))
+            if self.completer:
+                del self.completer
+            self.completer = AtrophyCompleter(self.cmd_dict.keys())  
             self.completer.addSymbols(self.elf.symbol_dict.keys())
+            if self.stack:
+                del self.stack
             self.stack = Stack()
             self._child_init(pid)
         #error case
@@ -287,19 +295,26 @@ class Atrophy(object):
             self.output(WARN("No such pid %d" % pid) )
             return
             
+        if self.debug_pid != 0:
+            if self.debug_pid == pid:
+                WARN("Already attached to pid: %d" % self.debug_pid)
+                return
+            WARN("Detatching from old pid: %d" % self.debug_pid) 
+            self.detach()
+
         try:
             self.elf = ELF(*parse_elf("/proc/%d/exe"%pid))
+            if self.completer:
+                del self.completer
+            self.completer = AtrophyCompleter(self.cmd_dict.keys())  
             self.completer.addSymbols(self.elf.symbol_dict.keys())
+            if self.stack:
+                del self.stack
             self.stack = Stack()
         except Exception as e:
             self.output(WARN("Could not find elf for process %d" % pid))
             self.output(INFO(str(e)))
-            
-      
-        if self.debug_pid != 0:
-            WARN("Detatching from old pid: %d" % self.debug_pid) 
-            self.detach()
-        
+
         libc.ptrace(PTRACE_ATTACH,pid,NULL,NULL)
         self.debug_pid = pid
         self._child_init(pid)
