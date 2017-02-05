@@ -9,9 +9,6 @@ from keystone import *
 leave == (mov esp,ebp; pop ebp)
 '''
 CtrlInstrDict = {
-    "\xe8":("call",5), # call imm32 
-    "\xff":("call",2), # call reg
-    "\xc3":("ret",1),
     #
     "\xe9":("jmp",5), # + "\xff\x00\x00\x00"
     "\xeb":("jmp",2),
@@ -47,22 +44,25 @@ CtrlInstrDict = {
     "\x0f\x8e":("jle",6),
     "\x7f":("jg",2),
     "\x0f\x8f":("jg",6),
-    #
-    "\xe2":("loop",2),
-    # reg,reg
-    "\x48\x39":("cmp64",3), 
-    # reg,imm32
-    "\x48\x3d":("cmp64",6),
-    # reg,[reg]
-    "\x48\x3b":("cmp64",3), 
-    "\x48":("test",7),
-    "\xc9":("leave",1),
-    #"enter":"\x"
-                #sub imm32        sub imm8
-    "\x48\x81\xec":("sub rsp",7),
-    "\x48\x83\xec":("sub rsp",4),
 }    
+    
+    
+# Things that we could probably get from emulation...
+#    "\xe2":("loop",2),
+#     reg,reg
+#    "\x48\x39":("cmp64",3), 
+#     reg,imm32
+#    "\x48\x3d":("cmp64",6),
+#     reg,[reg]
+#    "\x48\x3b":("cmp64",3), 
+#    "\x48":("test",7),
+#    "enter":"\x"
+#    "\xc9":("leave",1),
+#    "\xc3":("ret",1),
 
+
+#    "\xe8":("call",5), # call imm32 
+#    "\xff":("call",2), # call reg
 
 class AsmUtil(): 
         
@@ -70,6 +70,11 @@ class AsmUtil():
         self.NullLocs = []
         self.cntrlInstrDict = CtrlInstrDict 
         
+        # functions lended by Atrophy
+        self.getString = None
+        self.getMem = None
+        self.getReg = None
+
         if maxsize < 2**32:
             ks_mode = KS_MODE_32 
             cs_mode = CS_MODE_32
@@ -82,6 +87,13 @@ class AsmUtil():
     
         # addr:[comment1, comment2]
         self.comments = {}
+
+
+    # allow asm_utils to utilize atrophy functions
+    def share_functions(self,getString,getMem,getReg):
+        self.getString = getString
+        self.getMem = getMem
+        self.getReg = getReg
 
     # find places to insert shellcode for 
     # hooks to stay
@@ -125,7 +137,8 @@ class AsmUtil():
     def op_append_comments(self,instr):
         if instr.mnemonic == "call":
             self.comment_add(instr.op_str," %sC:0x%x"%(ORANGE,instr.address))
-
+            
+        # (address mnemonic opstr)
         # rip relative dereference
         pc = "[rip" if maxsize > 2**32 else "[esp"
         ind = instr.op_str.find(pc) 
@@ -133,6 +146,14 @@ class AsmUtil():
             self.comment_add("0x%x"%instr.address,  \
                              self.rip_rel_calc(instr.address,instr.op_str[ind:]), \
                              prepend=True)
+
+        ## Assorted address in src operand, try to interpret
+        if instr.op_str.startswith("0x"):
+            comment = self.interpret_address(instr)
+            self.comment_add("0x%x"%instr.address," #%s%s"%(ORANGE,comment))
+
+        
+        
             
     # ****** address needs to be a string ******
     def comment_add(self,address,content,prepend=False): 
@@ -153,13 +174,62 @@ class AsmUtil():
     def comment_del(self,address,index=-1): 
         if not address:
             return
-        try:
-            self.comments[address].pop()
-        except:
-            pass
-                
-
+        if index == -1:
+            try:
+                self.comments[address].pop()
+            except:
+                pass
+        else:
+            self.comments[address] = self.comments[address][0:index] + \
+                                     self.comments[address][index+1:]
+        
                  
+    # Input == capstone instruction
+    #
+    # Attempts to decode/interpret the op_str address
+    # based on then context of the mnemonic/address 
+    #
+    # Returns datatype in correct display type (e.g symbol||string||const...) 
+    def interpret_address(self,instr):
+        # long jump
+        if instr.bytes[0] == "\x0f" and len(instr.bytes) == 6:
+            return "<(^-^)>"
+
+        #instr.op_str == "0xabc..."
+        if instr.op_str in self.comments.keys():
+            # remove old DstComments if needed
+            try: 
+                for comment in self.comments["0x%x"%instr.address]:
+                    if "DstComments(" in comment:
+                        self.comment_del("0x%x"%instr.address,self.comments["0x%x"%instr.address].index(comment))
+                        break
+            except KeyError:
+                pass
+
+            dst_comment = ""
+            for comment in self.comments[instr.op_str]:
+                if "DstComment(" not in comment:
+                    dst_comment+=comment 
+
+            return "DstComments(" + dst_comment +")"
+
+        # short jump
+        if chr(instr.bytes[0]) in CtrlInstrDict.keys():
+            return "doop"
+            
+        # callz
+        #"\xff":("call",2), # call reg (need more info for this.. -_-)
+        # "\xe8":("call",5), # call imm32 
+        if chr(instr.bytes[0]) == "\xe8": 
+            return "loop"
+            
+        if instr.op_str == "lea":
+            return "herp"
+        potential_string = self.getString(instr.address,verbose=False) 
+        # "str\x00"
+        if len(potential_string) > 2:
+            return potential_string
+
     # Samples:
     # eax, dword ptr [rip + 0x221fc7] 
     # 0x7f28c994acb2: lea rsp, qword ptr [rsp + rax*8] 
