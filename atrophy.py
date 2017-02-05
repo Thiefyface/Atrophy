@@ -782,20 +782,29 @@ class Atrophy(object):
 
 
     def pp_disassemble(self,count=10,addr=None):
+        addr = ""
+
         if not self.AsmUtil:
             self.output(WARN("Asm Utils disabled. Keystone/capstone installed?"))
             return
 
         try:
             count = int(count)
+            if addr:
+                addr = self.filter_addr(addr)
         except ValueError:
-            count = int(count,16)
+            try:
+                count = int(count,16)
+                if addr:
+                    addr = self.filter_addr(addr)
+            except ValueError:
+                # addr only passed?
+                addr=self.filter_addr(count)
+                count = 10
         except:
             self.output(WARN("Invalid instruction count given"))
             return ""
 
-        if addr:
-            addr = self.filter_addr(addr)
            
         disasm_list = self.disassemble(addr,count)
 
@@ -943,7 +952,7 @@ class Atrophy(object):
             t = self.current_thread
             addr = "0x%x" % t.regStruct.get_register(self.instr_reg)
             
-        formatted_comment = "%s #%s" % (ORANGE,comment_buff)
+        formatted_comment = "%s #%s" % (PURPLE,comment_buff)
         self.AsmUtil.comment_add(addr,formatted_comment) 
         self.output("Added comment '%s' to %s" % (comment_buff,addr))
 
