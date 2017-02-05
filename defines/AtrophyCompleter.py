@@ -11,7 +11,6 @@ class AtrophyCompleter(rlcompleter.Completer):
         self.cmdcomplete = cmdcomplete
         self.symbols = []
         self.index = 0
-        self.last_run_start = -1
 
         self.session_delim = "#! Session Started !#"
 
@@ -33,30 +32,42 @@ class AtrophyCompleter(rlcompleter.Completer):
         self.project_cmds = [ "sd", "b", "db", "sb","#", "//" ]
 
         readline.set_history_length(self.HISTLEN)
+
         try:
             readline.read_history_file(self.HISTFILE)
             readline.add_history(self.session_delim)
-            readline.write_history_file(histfile)
         except Exception as e:
-            pass
+            print e
 
         atexit.register(self.on_exit,self.HISTFILE)
 
      def on_exit(self,histfile):
         # append last 'run'/'attach' to end for convieniance
         length = readline.get_current_history_length()
+        tmp = []
+        last_run = ""
 
-        for i in range(length,0,-1):
-            line = readline.get_history_item(i)
-            if line.startswith("run") or line.startswith("attach"): 
-                readline.add_history(line) 
-                self.last_run_start = (length - i)
-                break
+    
+        if length > self.HISTLEN:
+            upper = length
+            lower = length-self.HISTLEN
+        else:
+            upper = length
+            lower = 0
         
-        bottom_limit = length-(self.HISTLEN)+1
-        for i in range(0,bottom_limit):
-            readline.remove_history_item(i)
-           
+        for i in range(lower,upper):
+            tmp.append(readline.get_history_item(i)) 
+
+        readline.clear_history()
+
+        for i in range(1,self.HISTLEN-1):
+            line = tmp[i]
+            readline.add_history(line)
+            if line.startswith("run") or line.startswith("attach"): 
+                last_run = line 
+              
+        if last_run:
+            readline.add_history(last_run) 
         readline.write_history_file(histfile)
         
      def print_history(self,count=0):
