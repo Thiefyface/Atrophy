@@ -109,6 +109,8 @@ class Atrophy(object):
 
         try:
             self.EmuUtil = EmuUtil() 
+            # so disasm can be commented from emu (jump taken/rets/etc)
+            self.EmuUtil.init_commenting_function(self.AsmUtil.emu_append_comment)
         except Exception as e:
             self.output(str(e))
             self.output("Could not load Unicorn Engine, Emulation features disabled")
@@ -495,7 +497,7 @@ class Atrophy(object):
         status = libc.ptrace(PTRACE_GETREGS,self.debug_pid,0,byref(regs))
 
         if status != 0:
-            self.output(WARN("Error getting updated registers, pid: %d" % self.debub_pid))
+            self.output(WARN("Error getting updated registers, pid: %d" % self.debug_pid))
             self.output(WARN("Dumping last known state"))
             self.output(status)
             return -1
@@ -644,8 +646,13 @@ class Atrophy(object):
     def stepInstruction(self,quiet=False,break_restore=False):
         pid = self.debug_pid 
         libc.ptrace(PTRACE_SINGLESTEP,pid,NULL,NULL)
-        if quiet:
-            self.output(self.printRegs(self.instr_reg))
+        self._update_regs(pid)
+        if not quiet:
+            try:
+                # no disassembly
+                self.pp_disassemble(count=2)
+            except:
+                self.output(self.printRegs(self.instr_reg))
 
         # so we don't loop
         if not break_restore: 
@@ -785,7 +792,6 @@ class Atrophy(object):
     def pp_disassemble(self,count=0,addr=None):
         off = 0xffffffff
         sym = ""
-
 
         if not self.AsmUtil:
             self.output(WARN("Asm Utils disabled. Keystone/capstone installed?"))

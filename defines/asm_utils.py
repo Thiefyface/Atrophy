@@ -1,5 +1,5 @@
 from ctypes import *
-from utility import GREEN,PURPLE,CYAN,CLEAR,ORANGE,YELLOW,BLU,fmtstr
+from utility import GREEN,PURPLE,CYAN,CLEAR,ORANGE,YELLOW,BLU,fmtstr,RED
 from sys import maxsize
 
 from capstone import *
@@ -151,9 +151,26 @@ class AsmUtil():
         if instr.op_str.startswith("0x"):
             comment = self.interpret_address(instr)
             self.comment_add("0x%x"%instr.address," #%s%s"%(ORANGE,comment))
+        
+    def emu_append_comment(self,block_address,instr):
+        # jump long
+        if instr.bytes[0] == 0xf and len(instr.bytes) == 6:
+            #print "block address: %s instr.address 0x%x" % (block_address,instr.address)
+            if block_address == instr.address:
+                self.comment_add("0x%x"%instr.address," %s#Jump taken"%GREEN)
+            else:
+                self.comment_add("0x%x"%instr.address," %s#Jump not taken"%RED)
 
-        
-        
+        # short jump
+        if chr(instr.bytes[0]) in CtrlInstrDict.keys():
+            return "derp"
+            
+        # callz
+        #"\xff":("call",2), # call reg (need more info for this.. -_-)
+        # "\xe8":("call",5), # call imm32 
+        if instr.bytes[0] == 0xe8: 
+            return "lerp"
+            
             
     # ****** address needs to be a string ******
     def comment_add(self,address,content,prepend=False): 
@@ -192,7 +209,8 @@ class AsmUtil():
     # Returns datatype in correct display type (e.g symbol||string||const...) 
     def interpret_address(self,instr):
         # long jump
-        if instr.bytes[0] == "\x0f" and len(instr.bytes) == 6:
+        #print repr(instr.bytes[0])
+        if instr.bytes[0] == 0xf and len(instr.bytes) == 6:
             return "<(^-^)>"
 
         #instr.op_str == "0xabc..."
@@ -220,12 +238,13 @@ class AsmUtil():
         # callz
         #"\xff":("call",2), # call reg (need more info for this.. -_-)
         # "\xe8":("call",5), # call imm32 
-        if chr(instr.bytes[0]) == "\xe8": 
+        if instr.bytes[0] == 0xe8: 
             return "loop"
             
         if instr.op_str == "lea":
             return "herp"
         potential_string = self.getString(instr.address,verbose=False) 
+
         # "str\x00"
         if len(potential_string) > 2:
             return potential_string

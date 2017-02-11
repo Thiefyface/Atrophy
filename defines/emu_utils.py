@@ -45,7 +45,11 @@ class EmuUtil():
         # mapped by context name, context==regs,mem==...mem.
         self.context_dict = {}
         self.mem_dict = {}
+
+        # comment function for commenting the disassembly
+        self.comment_disasm = None
         
+        self.last_instr = None
         
     def getEmuRegs(self,pid=0,regStruct=None):
         if regStruct:
@@ -57,6 +61,19 @@ class EmuUtil():
             pid = libc.waitpid(pid,byref(tmp_status),0)
             ret = libc.ptrace(PTRACE_GETREGS,pid,0,byref(self.regStruct))
             return ret
+
+    # provide method for emulator to comment disassembly
+    def init_commenting_function(self,comment_func):
+        self.comment_disasm = comment_func
+
+
+    # send instruction over to asm_util for commenting
+    def add_comment(self,block_address,instr):
+        if not self.comment_disasm:
+           self.output("Unable to comment %s" % block_address)   
+           return
+        # should be AsmUtil.emu_append_comment
+        self.comment_disasm(block_address,instr)
 
     def getAtrophyRegs(self,regStruct=None):
         if not regStruct:
@@ -192,9 +209,10 @@ class EmuUtil():
                 self.output(ERROR(e)) 
                 return self.getAtrophyRegs() 
 
-    def block_hook(self,emulator,address,block_size,user_data):
-        self.output("Basic Block: 0x%x-0x%x" % (address,address+block_size))
-        #print "userdata: %s" % repr(user_data)
+    def block_hook(self,emulator,block_address,block_size,user_data):
+        self.output("Basic Block: 0x%x-0x%x" % (block_address,block_address+block_size))
+        if self.last_instr:
+            self.add_comment(block_address,self.last_instr)     
          
     def segfault_hook(self,emulator,access,address,size,value,user_data):
         '''
@@ -220,16 +238,21 @@ class EmuUtil():
 
     def emu_disassemble(self,code, addr):
         tmp = ""
+        i = None
+
         for i in self.asm.cs.disasm(str(code),addr):
             tmp_bytes = "\\x" + b'\\x'.join("%02x"%x for x in i.bytes) 
             self.output("%s0x%x:%s %s %s   %s%s%s" % (GREEN,i.address,CYAN,i.mnemonic,i.op_str,YELLOW,tmp_bytes,CLEAR))
 
+        self.last_instr = i  
+        
 
     # - print instructions
     # - save state before emu stop
     def instr_hook(self,emulator,address,size,verbose=False):
         code = emulator.mem_read(address,size)
         self.emu_disassemble(code,address)
+
         if self.instr_count > 0:
             self.instr_count -= 1
         elif self.instr_count == 0:
