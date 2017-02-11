@@ -277,6 +277,7 @@ class Atrophy(object):
             if self.elf:
                 del self.elf
             self.elf = ELF(*parse_elf(full_path))
+            
             if self.completer:
                 del self.completer
             self.completer = AtrophyCompleter(self.cmd_dict.keys())  
@@ -781,38 +782,50 @@ class Atrophy(object):
         return disasm_list
 
 
-    def pp_disassemble(self,count=10,addr=None):
-        addr = ""
+    def pp_disassemble(self,count=0,addr=None):
+        off = 0xffffffff
+        sym = ""
+
 
         if not self.AsmUtil:
             self.output(WARN("Asm Utils disabled. Keystone/capstone installed?"))
             return
 
+        # default, 10 instructions @ rip
+        if not count and not addr:
+            addr = None
+            count = 10
+    
+        elif count and not addr:
+            try:
+                if "0x" in count: #probably means it as location, not count
+                    addr = self.filter_addr(count)
+                    count = 10
+            except:
+                pass
+
+        else:
+            addr = self.filter_addr(addr)
+            
         try:
             count = int(count)
-            if addr:
-                addr = self.filter_addr(addr)
         except ValueError:
             try:
                 count = int(count,16)
-                if addr:
-                    addr = self.filter_addr(addr)
             except ValueError:
-                # addr only passed?
-                addr=self.filter_addr(count)
-                count = 10
-        except:
-            self.output(WARN("Invalid instruction count given"))
-            return ""
-
-           
+                self.output(WARN("Invalid instruction count given"))
+                return ""
+       
         disasm_list = self.disassemble(addr,count)
 
         # disasm_list[0][0] == addr of first address
         try:
             _,sym,off = self.findNearestSymbol(disasm_list[0][0])
         except:
-            _,sym,off = self.findNearestSymbol(disasm_list[0][0],reloc=False)
+            try:
+                _,sym,off = self.findNearestSymbol(disasm_list[0][0],reloc=False)
+            except:
+                pass
 
         # Don't bother if it's pretty far away
         if off < 0x100000:
@@ -1096,8 +1109,8 @@ class Atrophy(object):
                         #self.output(WARN("Invalid args for cmd %s: %s" % (cmd,str(args))))
                 else:
                     #! For debugging
-                    # print "executing without 'try'"  
-                    # ret = self.cmd_dict[cmd]()
+                    #print "executing without 'try'"  
+                    #ret = self.cmd_dict[cmd]()
                     try:
                         
                         ret = self.cmd_dict[cmd]()
@@ -1107,7 +1120,7 @@ class Atrophy(object):
                 
             else:
                 try:
-                    ret = subprocess.check_output(inp,shell=True)
+                    ret = subprocess.check_output(inp,shell=True,env={'COLUMNS':'249'})
                     self.output("\n" + GREEN + ret + CLEAR)
                     continue
                 except KeyboardInterrupt:

@@ -103,9 +103,13 @@ def parse_elf(path):
                 save_reloc(symbol_dict,dyn_str_table,rel)
     
     for rela_sec in rela_list:
-        for rela in parse_rela(get_section(rela_sec)): 
-            if rela.is_jump_slot():
-                save_reloc(symbol_dict,dyn_str_table,rela)
+        tmp = parse_rela(get_section(rela_sec))
+        try:
+            for rela in parse_rela(get_section(rela_sec)): 
+                if rela.is_jump_slot():
+                    save_reloc(symbol_dict,dyn_str_table,rela)
+        except IndexError:
+            break
     
     if DEBUG:
         print "----------------"
@@ -226,8 +230,14 @@ def parse_rel(raw_reloc):
 
 #### Rela Parsing
 def parse_rela(raw_reloc):
+    i = 0
     reloc_list_raw = [raw_to_cstruct_args(raw_reloc[i:i+sizeof(Elf_Rela)],Elf_Rela) for i in xrange(0,len(raw_reloc),sizeof(Elf_Rela)) ] 
-    reloc_list = [ Elf_Rela(*reloc_list_raw[i]) for i in range(0,len(reloc_list_raw)) ]
+
+    try:
+        reloc_list = [ Elf_Rela(*reloc_list_raw[i]) for i in range(0,len(reloc_list_raw)) ]
+    except:
+        print i
+    
     return reloc_list
  
     

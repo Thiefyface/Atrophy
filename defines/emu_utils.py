@@ -41,10 +41,12 @@ class EmuUtil():
 
 
         self.comms_sock = None
+
+        # mapped by context name, context==regs,mem==...mem.
         self.context_dict = {}
+        self.mem_dict = {}
         
         
-         
     def getEmuRegs(self,pid=0,regStruct=None):
         if regStruct:
             self.regStruct = deepcopy(regStruct) 
@@ -81,7 +83,6 @@ class EmuUtil():
             self.pid = new_pid
             self.proc_map = ProcMap(self.pid) 
             self.proc_map.update_map()
-
 
         if self.getEmuRegs(self.pid,newRegs) == 0:   
             self.output(GOOD("Registers Acquired")) 
@@ -257,7 +258,6 @@ class EmuUtil():
             try:
                 #print "uni.mem_map(0x%x,0x%x,%d)" % (lbound,ubound-lbound,perms)
                 self.uni.mem_map(lbound,ubound-lbound,perms)
-                    
                 if perms > 0:
                     self.uni.mem_write(lbound,tmp)
             except unicorn.UcError as e:
@@ -278,13 +278,40 @@ class EmuUtil():
         except:
             self.output("[;_;] Context %s not found!"%context_str) 
 
+        self.mem_dict[context_str] = [] 
+        for i in self.mem_dict[context_str]:
+            lbound,ubound,perms,filename = i  
+            tmp = loadMemoryMap(i,self.pid,verbose=True)
+            self.uni.mem_write(lbound,tmp)
+
     def save_emu_context(self,context_str):
         try:
             #context already exists
             self.uni.context_update(self.context_dict[context_str]) 
         except:
             self.context_dict[context_str] = self.uni.context_save()
+
+        self.mem_dict[context_str] = [] 
+        for i in self.get_writable_mem():
+            self.mem_dict[context_str].append(loadMemoryMap(i,self.pid,verbose=True))
+            
         self.output("[s.s] Content %s Saved" % context_str)
+
+    
+
+    # returns list of memory ranges with writable permissions.
+    def get_writable_mem(self):
+        writeable_ranges = []
+        self.proc_map.update_map()
+
+        for i in self.proc_map.get_memory_ranges():
+            lbound,ubound,perms,filename = i
+            perms = rwx_to_int(perms)
+            if perms & 0x2: #r=1,w=2,x=4
+                writeable_ranges.append(i) 
+
+        return writeable_ranges
+        
 
     def get_reg(self,reg):
         if not len(self.uni_dict):
