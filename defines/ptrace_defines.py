@@ -7,6 +7,8 @@ from os import popen
 MAX_PID = 32768
 #constants
 
+eflags = ["carry","parity","adjust","zero","sign","trap","interrupt","direction","overflow"]
+
 PTRACE_TRACEME = 0
 PTRACE_PEEKTEXT = 1
 PTRACE_PEEKDATA = 2

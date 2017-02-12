@@ -152,25 +152,31 @@ class AsmUtil():
             comment = self.interpret_address(instr)
             self.comment_add("0x%x"%instr.address," #%s%s"%(ORANGE,comment))
         
-    def emu_append_comment(self,block_address,instr):
-        # jump long
-        if instr.bytes[0] == 0xf and len(instr.bytes) == 6:
-            #print "block address: %s instr.address 0x%x" % (block_address,instr.address)
-            if block_address == instr.address:
-                self.comment_add("0x%x"%instr.address," %s#Jump taken"%GREEN)
-            else:
-                self.comment_add("0x%x"%instr.address," %s#Jump not taken"%RED)
+    def emu_append_comment(self,block_address,instr,comment=""):
+        if comment:
+            self.comment_add("0x%x"%block_address,comment)
 
-        # short jump
-        if chr(instr.bytes[0]) in CtrlInstrDict.keys():
-            return "derp"
-            
-        # callz
-        #"\xff":("call",2), # call reg (need more info for this.. -_-)
-        # "\xe8":("call",5), # call imm32 
-        if instr.bytes[0] == 0xe8: 
-            return "lerp"
-            
+        elif not comment:
+            # jump long
+            if instr.bytes[0] == 0xf and len(instr.bytes) == 6:
+                #print "block address: %s instr.address 0x%x" % (block_address,instr.address)
+                '''
+                if block_address == instr.address:
+                    self.comment_add("0x%x"%instr.address," %s#Jump taken"%GREEN)
+                else:
+                    self.comment_add("0x%x"%instr.address," %s#Jump not taken"%RED)
+                '''
+
+            # short jump
+            if chr(instr.bytes[0]) in CtrlInstrDict.keys():
+                return "derp"
+                
+            # callz
+            #"\xff":("call",2), # call reg (need more info for this.. -_-)
+            # "\xe8":("call",5), # call imm32 
+            if instr.bytes[0] == 0xe8: 
+                return "lerp"
+                
             
     # ****** address needs to be a string ******
     def comment_add(self,address,content,prepend=False): 
@@ -218,7 +224,7 @@ class AsmUtil():
             # remove old DstComments if needed
             try: 
                 for comment in self.comments["0x%x"%instr.address]:
-                    if "DstComments(" in comment:
+                    if "DC(" in comment:
                         self.comment_del("0x%x"%instr.address,self.comments["0x%x"%instr.address].index(comment))
                         break
             except KeyError:
@@ -226,23 +232,24 @@ class AsmUtil():
 
             dst_comment = ""
             for comment in self.comments[instr.op_str]:
-                if "DstComment(" not in comment:
+                if "DC(" not in comment:
                     dst_comment+=comment 
 
-            return "DstComments(" + dst_comment +")"
+            return "DC(" + dst_comment +")"
 
         # short jump
         if chr(instr.bytes[0]) in CtrlInstrDict.keys():
-            return "doop"
+            pass #return "doop"
             
         # callz
         #"\xff":("call",2), # call reg (need more info for this.. -_-)
         # "\xe8":("call",5), # call imm32 
         if instr.bytes[0] == 0xe8: 
-            return "loop"
+            pass #return "loop"
             
         if instr.op_str == "lea":
-            return "herp"
+            pass #return "herp"
+
         potential_string = self.getString(instr.address,verbose=False) 
 
         # "str\x00"

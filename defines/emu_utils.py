@@ -48,8 +48,15 @@ class EmuUtil():
 
         # comment function for commenting the disassembly
         self.comment_disasm = None
-        
+
+        # for jump determination        
         self.last_instr = None
+
+        # list of all basic blocks encountered 
+        self.bb = []
+
+        self.dyn_dep_stack = []
+
         
     def getEmuRegs(self,pid=0,regStruct=None):
         if regStruct:
@@ -74,6 +81,13 @@ class EmuUtil():
            return
         # should be AsmUtil.emu_append_comment
         self.comment_disasm(block_address,instr)
+
+    def add_comment_raw(self,address,comment):
+        if not comment or not address:
+           self.output("Unable to comment")   
+           return      
+        self.comment_disasm(address,None,comment)
+    
 
     def getAtrophyRegs(self,regStruct=None):
         if not regStruct:
@@ -178,7 +192,6 @@ class EmuUtil():
         '''
 
     def startEmulator(self,instr_count=0,timeout=0):
-         
         # since we can't really save state if we don't know
         # when we're going to end
         if instr_count <= 0:
@@ -211,8 +224,97 @@ class EmuUtil():
 
     def block_hook(self,emulator,block_address,block_size,user_data):
         self.output("Basic Block: 0x%x-0x%x" % (block_address,block_address+block_size))
-        if self.last_instr:
-            self.add_comment(block_address,self.last_instr)     
+        bb_type = ""
+        bb_info = ""
+    
+        i = self.last_instr
+
+        if i:
+            self.add_comment(block_address,i)     
+            if i.mnemonic == "call": 
+                bb_type = "call"
+                bb_info = i.op_str
+                self.dyn_dep_stack.append((block_address,block_address+block_size,bb_type))
+
+            elif i.mnemonic == "ret":
+                bb_type = "ret"    
+                if maxsize > 2**32:
+                    bb_info = self.get_reg("rax") 
+                else:
+                    bb_info = self.get_reg("eax") 
+
+                try:
+                    tmp = self.dyn_dep_stack.pop()
+                    print "popped: %s" % repr(tmp)
+                except Exception as e:
+                    # print str(e)
+                    # potentially started in middle of block
+                    pass
+    
+            elif i.mnemonic == "syscall":
+                bb_type = "syscall"
+                if maxsize > 2**32:
+                    bb_info = self.get_reg("rax") 
+                else:
+                    bb_info = self.get_reg("eax") 
+                # no dyn_dep action
+    
+            elif i.mnemonic[0] == "j":
+                bb_type = "jump"    
+
+                # determine direction of jump
+                if (i.address + 2) == block_address or (i.address+6) == block_address:  # 2 bytes for len(jmp)/6 bytes for len of long jump
+                    tmp = None
+                    bb_info = "%s not taken" % i.mnemonic 
+                    self.add_comment_raw(i.address," %s#Jump not taken"%RED)
+                    # check for loop exit
+                    try:
+                        while self.dyn_dep_stack[-1][2] == "loop" and block_address > self.dyn_dep_stack[-1][1]:   
+                            tmp = self.dyn_dep_stack.pop()
+                            print "popped: %s" % repr(tmp)
+                    except Exception as e:
+                            #print str(e)
+                            pass
+
+                    if not tmp:
+                        self.dyn_dep_stack.append((block_address,int(i.op_str,16),"branch"))
+                        
+                else:
+                    bb_info = "%s taken" % i.mnemonic
+                    self.add_comment_raw(i.address," %s#Jump taken"%GREEN)
+
+                    # jump forward
+                    if i.address < block_address:
+                        try:
+                        # check for loop exit
+                            while self.dyn_dep_stack[-1][2] == "loop" and block_address > self.dyn_dep_stack[-1][1]:   
+                                tmp = self.dyn_dep_stack.pop()
+                                print "popped: %s" % repr(tmp)
+                        except Exception as e:
+                            #print str(e)
+                            pass
+                        
+                    # jump backwards
+                    elif i.address > block_address: 
+                                                 # loop start  # loop end
+                        self.dyn_dep_stack.append((block_address,i.address,"loop"))
+                    else:
+                        # should never happen
+                        self.output("Lol, whut?")
+         
+            else:
+                bb_type = "unknown"
+                bb_info = "%s0x%x %s %s" % (YELLOW,i.address,i.mnemonic,i.op_str) 
+
+            self.bb.append((block_address,block_size,bb_type,bb_info))
+
+
+
+        last_addrs = [] # loop detection
+        current_loop = []
+        loop_stack = [[0,[]]] # bottom of stack, always the same 
+        state = 0  # 0 == no loop, 1 == loop
+
          
     def segfault_hook(self,emulator,access,address,size,value,user_data):
         '''
@@ -221,6 +323,12 @@ class EmuUtil():
             val = self.uni.reg_read(uni_dict[reg])
             self.output("%s : 0x%x" % (reg,val))
         '''
+        self.dyn_dep_stack = set(self.dyn_dep_stack)
+        for i in range(0,len(self.dyn_dep_stack)):
+            bb = self.dyn_dep_stack.pop()
+            print repr(bb)
+            self.add_comment_raw(bb[0]," !%sDDChain"%GREEN)
+
         self.output(YELLOW + "======= <(x.x)> ========" + CLEAR)
 
         '''
@@ -235,6 +343,12 @@ class EmuUtil():
         self.output("value 0x%x" % value)
         self.output(YELLOW + "======= <(;.;)> ========" + CLEAR)
         #print "user_data 0x%x" % user_data
+        i = self.last_instr
+        self.output("%s0x%x:%s %s %s%s" % (ORANGE,i.address,YELLOW,i.mnemonic,i.op_str,CLEAR))
+
+
+        self.add_comment_raw(i.address," %s-----EmuSegfault------" % ORANGE)
+
 
     def emu_disassemble(self,code, addr):
         tmp = ""
@@ -245,13 +359,14 @@ class EmuUtil():
             self.output("%s0x%x:%s %s %s   %s%s%s" % (GREEN,i.address,CYAN,i.mnemonic,i.op_str,YELLOW,tmp_bytes,CLEAR))
 
         self.last_instr = i  
+        return i
         
 
     # - print instructions
     # - save state before emu stop
     def instr_hook(self,emulator,address,size,verbose=False):
         code = emulator.mem_read(address,size)
-        self.emu_disassemble(code,address)
+        instr = self.emu_disassemble(code,address)
 
         if self.instr_count > 0:
             self.instr_count -= 1
@@ -264,6 +379,9 @@ class EmuUtil():
                 val = self.uni.reg_read(uni_dict[reg])
                 self.output("%s : 0x%x" % (reg,val))
 
+        #if instr.mnemonic == "call":
+            
+    
 
     def initMemory(self,pid):
 
@@ -292,9 +410,9 @@ class EmuUtil():
 
     def restart_emu(self):
         self.load_emu_context("init")
+        self.initMemory()
 
     def load_emu_context(self,context_str):
-
         try:
             self.uni.context_restore(self.context_dict[context_str])
             self.output( "[L.L] Content %s Loaded" % context_str)
@@ -320,8 +438,6 @@ class EmuUtil():
             
         self.output("[s.s] Content %s Saved" % context_str)
 
-    
-
     # returns list of memory ranges with writable permissions.
     def get_writable_mem(self):
         writeable_ranges = []
@@ -334,7 +450,13 @@ class EmuUtil():
                 writeable_ranges.append(i) 
 
         return writeable_ranges
-        
+
+    def bb_dump(self):
+
+        # nested loops?
+        for i in self.bb:
+            addr,size,typ,info = i
+            self.output("%s0x%x:%s %s %s (bb_len:%d)"%(GREEN,addr,CYAN,typ,info,size))
 
     def get_reg(self,reg):
         if not len(self.uni_dict):

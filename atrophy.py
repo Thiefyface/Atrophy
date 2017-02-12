@@ -220,6 +220,7 @@ class Atrophy(object):
                      "remu":self.restart_emu,
                      "lemu":self.load_emu_context,
                      "semu":self.save_emu_context,
+                     "bb":self.bb_dump,
                      # emulator control (regs/mem)
                      "gde":self.get_emu_mem,
                      "sde":self.set_emu_mem,
@@ -809,9 +810,11 @@ class Atrophy(object):
                     count = 10
             except:
                 pass
-
         else:
-            addr = self.filter_addr(addr)
+            tmp = addr
+            if "0x" in count: #probably means it as location, not count
+                addr = self.filter_addr(count)
+            count = tmp
             
         try:
             count = int(count)
@@ -888,9 +891,15 @@ class Atrophy(object):
 
     
     def restart_emu(self):
-        self.output(INFO("Emu Initial Context restored"))
+        self.output(INFO("Emu Reinitialization Requested."))
         self.EmuUtil.init_flag = False
-        self.EmuUtil.restart_emu()
+        del self.EmuUtil
+        self.EmuUtil = EmuUtil() 
+        regStruct = self._find_thread(self.debug_pid).regStruct
+        self.EmuUtil.initEmulator(self.debug_pid,self.current_thread.regStruct)
+        self.EmuUtil.init_flag = True
+        # so disasm can be commented from emu (jump taken/rets/etc)
+        self.EmuUtil.init_commenting_function(self.AsmUtil.emu_append_comment)
 
     def load_emu_context(self,name):
         self.EmuUtil.load_emu_context(name)
@@ -935,6 +944,9 @@ class Atrophy(object):
 
     def set_emu_reg(self,register,value):
         self.EmuUtil.set_reg(register,value)
+
+    def bb_dump(self):
+        self.EmuUtil.bb_dump()
 
 
 ##########################        
