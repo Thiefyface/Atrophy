@@ -666,7 +666,7 @@ class Atrophy(object):
             self.stepInstruction(quiet=True,break_restore=True)
             # restore soft break
             #self.output("Restoring 0x%08x" % addr)
-            self.setBreak(self.break_restore_loc)
+            self.setBreak(self.break_restore_loc,comment=False)
             self.break_restore_loc = None
 
 ##########################        
@@ -704,7 +704,7 @@ class Atrophy(object):
         self._clean_up(kill=True)
         
 ##########################        
-    def setBreak(self,addr):
+    def setBreak(self,addr,comment=True):
         addr = self.filter_addr(addr)
         m = self.proc_map.find_region(addr) 
         
@@ -715,8 +715,19 @@ class Atrophy(object):
         if "x" not in m.permissions:
             self.output(INFO("Breakpoint on non-executable address"))
 
+        if comment:
+            try:
+                instr = self.disassemble(addr,1,False)[0]
+                asm_str = instr[1] + " " + instr[2]
+                self.add_comment("%s"%(asm_str),"0x%x"%addr)
+            except Exception as e:
+                print "setBreak " + str(e)
+            
+
         self.break_dict[addr] = ord(self.getByte(addr)) 
         self.setMem(addr,0xcc)
+
+
          
 ##########################        
     def listBreak(self):
@@ -725,9 +736,10 @@ class Atrophy(object):
         for i in self.break_dict:
             #we set to -1 if deleted
             if self.break_dict[i] > -1:
-                addr = self.filter_val(self.break_dict[i])
-                instr = self.AsmUtil.disassemble_single(addr)
-                self.output("Break %s: 0x%x : %s%s" % (CYAN,i,instr,CLEAR) )
+                try:
+                    self.output("Break %s: 0x%x%s" % (CYAN,i,CLEAR))
+                except Exception as e:
+                    print "listBreak " + str(e)
 
 ##########################        
     def delBreak(self,addr):
@@ -762,6 +774,9 @@ class Atrophy(object):
         while True:
             # grab 32 bytes at a time
             tmp = bytes(self.getMem(addr,count=32,quiet=False)) 
+            if tmp == "None":
+                self.output("Invalid Address provided")
+                return []
             tmp_dis = self.AsmUtil.disassemble(tmp,addr) 
             
             disasm_list += tmp_dis
@@ -790,7 +805,7 @@ class Atrophy(object):
         return disasm_list
 
 
-    def pp_disassemble(self,count=0,addr=None):
+    def pp_disassemble(self,addr=None,count=10):
         off = 0xffffffff
         sym = ""
 
@@ -798,24 +813,9 @@ class Atrophy(object):
             self.output(WARN("Asm Utils disabled. Keystone/capstone installed?"))
             return
 
-        # default, 10 instructions @ rip
-        if not count and not addr:
-            addr = None
-            count = 10
-    
-        elif count and not addr:
-            try:
-                if "0x" in count: #probably means it as location, not count
-                    addr = self.filter_addr(count)
-                    count = 10
-            except:
-                pass
-        else:
-            tmp = addr
-            if "0x" in count: #probably means it as location, not count
-                addr = self.filter_addr(count)
-            count = tmp
-            
+        if addr:
+            addr = self.filter_addr(addr)
+
         try:
             count = int(count)
         except ValueError:
@@ -974,7 +974,6 @@ class Atrophy(object):
                 except Exception as e:
                     comment_buff+=comment[i]
                     addr = None
-                    print e
             else:
                 comment_buff+=comment[i] + " "
                 #print comment_buff
@@ -1671,6 +1670,8 @@ class Atrophy(object):
         
         if self.proc_map.base_relocation > 0x400000:
             self.output("ASL Base:   %s0x%x%s"%(GREEN,self.proc_map.base_relocation,CLEAR))
+        else:
+            self.proc_map.base_relocation = 0x0
             
         
         if queryStr:

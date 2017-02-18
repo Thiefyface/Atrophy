@@ -243,6 +243,8 @@ class EmuUtil():
                 else:
                     bb_info = self.get_reg("eax") 
 
+                self.add_comment_raw(i.address," %s#RET:0x%x"%(GREEN,bb_info))
+
                 try:
                     tmp = self.dyn_dep_stack.pop()
                     print "popped: %s" % repr(tmp)

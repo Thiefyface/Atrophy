@@ -87,6 +87,9 @@ class AsmUtil():
     
         # addr:[comment1, comment2]
         self.comments = {}
+        
+        # For potential strings, discard strings of len < str_len_filter
+        self.str_len_filter = 3
 
 
     # allow asm_utils to utilize atrophy functions
@@ -150,33 +153,13 @@ class AsmUtil():
         ## Assorted address in src operand, try to interpret
         if instr.op_str.startswith("0x"):
             comment = self.interpret_address(instr)
-            self.comment_add("0x%x"%instr.address," #%s%s"%(ORANGE,comment))
+            if comment:
+                self.comment_add("0x%x"%instr.address," #%s%s"%(ORANGE,comment))
         
     def emu_append_comment(self,block_address,instr,comment=""):
         if comment:
             self.comment_add("0x%x"%block_address,comment)
 
-        elif not comment:
-            # jump long
-            if instr.bytes[0] == 0xf and len(instr.bytes) == 6:
-                #print "block address: %s instr.address 0x%x" % (block_address,instr.address)
-                '''
-                if block_address == instr.address:
-                    self.comment_add("0x%x"%instr.address," %s#Jump taken"%GREEN)
-                else:
-                    self.comment_add("0x%x"%instr.address," %s#Jump not taken"%RED)
-                '''
-
-            # short jump
-            if chr(instr.bytes[0]) in CtrlInstrDict.keys():
-                return "derp"
-                
-            # callz
-            #"\xff":("call",2), # call reg (need more info for this.. -_-)
-            # "\xe8":("call",5), # call imm32 
-            if instr.bytes[0] == 0xe8: 
-                return "lerp"
-                
             
     # ****** address needs to be a string ******
     def comment_add(self,address,content,prepend=False): 
@@ -224,7 +207,7 @@ class AsmUtil():
             # remove old DstComments if needed
             try: 
                 for comment in self.comments["0x%x"%instr.address]:
-                    if "DC(" in comment:
+                    if "**" in comment:
                         self.comment_del("0x%x"%instr.address,self.comments["0x%x"%instr.address].index(comment))
                         break
             except KeyError:
@@ -232,11 +215,12 @@ class AsmUtil():
 
             dst_comment = ""
             for comment in self.comments[instr.op_str]:
-                if "DC(" not in comment:
-                    dst_comment+=comment 
+                if "**" not in comment:
+                    dst_comment+=comment[2:] 
 
-            return "DC(" + dst_comment +")"
+            return "**" + dst_comment
 
+        #! Todo, what do I want at jumps?
         # short jump
         if chr(instr.bytes[0]) in CtrlInstrDict.keys():
             pass #return "doop"
@@ -253,7 +237,7 @@ class AsmUtil():
         potential_string = self.getString(instr.address,verbose=False) 
 
         # "str\x00"
-        if len(potential_string) > 2:
+        if len(potential_string) > self.str_len_filter:
             return potential_string
 
     # Samples:
