@@ -283,9 +283,8 @@ class Atrophy(object):
             self.elf = ELF(*parse_elf(full_path))
             
             if self.completer:
-                del self.completer
-            self.completer = AtrophyCompleter(self.cmd_dict.keys())  
-            self.completer.addSymbols(self.elf.symbol_dict.keys())
+                self.completer.addSymbols(self.elf.symbol_dict.keys())
+
             if self.stack:
                 del self.stack
             self.stack = Stack()
@@ -312,9 +311,7 @@ class Atrophy(object):
         try:
             self.elf = ELF(*parse_elf("/proc/%d/exe"%pid))
             if self.completer:
-                del self.completer
-            self.completer = AtrophyCompleter(self.cmd_dict.keys())  
-            self.completer.addSymbols(self.elf.symbol_dict.keys())
+                self.completer.addSymbols(self.elf.symbol_dict.keys())
             if self.stack:
                 del self.stack
             self.stack = Stack()
@@ -360,14 +357,18 @@ class Atrophy(object):
            return None
 
         ret_bytes = ""
-      
         
         while len(ret_bytes) < count:
             try: 
                 long_val = libc.ptrace(ptval,self.current_thread.pid,addr,NULL)
                 tmp=struct.pack("<l",long_val)
                 addr.value += len(tmp)
-                ret_bytes+=tmp
+                if tmp:
+                    ret_bytes+=tmp
+                else:
+                    print repr(long_val)
+                    print repr(addr)
+                    break
             except Exception as e:
                 self.output(str(e) + ":131")
                 return -1
@@ -710,10 +711,9 @@ class Atrophy(object):
             try:
                 instr = self.disassemble(addr,1,False)[0]
                 asm_str = instr[1] + " " + instr[2]
-                self.add_comment("%s"%(asm_str),"0x%x"%addr)
+                self.add_comment("%s"%(asm_str),"%s"%addr)
             except Exception as e:
                 print "setBreak " + str(e)
-            
 
         self.break_dict[addr] = ord(self.getByte(addr)) 
         self.setMem(addr,0xcc)
@@ -726,7 +726,7 @@ class Atrophy(object):
             #we set to -1 if deleted
             if self.break_dict[i] > -1:
                 try:
-                    self.output("Break %s: 0x%x%s" % (CYAN,i,CLEAR))
+                    self.output("Break %s: %s%s" % (CYAN,i,CLEAR))
                 except Exception as e:
                     print "listBreak " + str(e)
 
@@ -763,12 +763,22 @@ class Atrophy(object):
         while True:
             # grab 32 bytes at a time
             tmp = bytes(self.getMem(addr,count=32,quiet=False)) 
-            if tmp == "None":
+            if tmp == "None" and len(disasm_list) == 0:
                 self.output("Invalid Address provided")
-                return []
-            tmp_dis = self.AsmUtil.disassemble(tmp,addr) 
+                break
             
+            tmp_dis = self.AsmUtil.disassemble(tmp,addr) 
+
+
             disasm_list += tmp_dis
+
+            if not len(disasm_list):
+                self.output(WARN("Unable to disassemble, probz not instructions."))
+                return tmp  
+
+            if not len(tmp_dis):
+                self.output(WARN("Disassembly ended early, probz started mid-instr..."))
+                break
 
             if count <= len(disasm_list):
                 disasm_list = disasm_list[:count] 
@@ -829,7 +839,11 @@ class Atrophy(object):
         if off < 0x100000:
             self.output(INFO("<%s+0x%x>"%(sym,off)))
 
-        self.output(disasm_format(disasm_list)+"\n") 
+        try:
+            self.output(disasm_format(disasm_list)+"\n") 
+        except:
+            # incase we couldn't actually disassemble...
+            return disasm_list
 
 
 ##########################        
@@ -1213,7 +1227,6 @@ class Atrophy(object):
                     self.output(ERROR("SEGFAULT"))
                     self.output(self._print_regs())
                     self.pp_disassemble()
-                    self.print_stack()
                     self._clean_up()
                 elif stopsig == 9: 
                     self.output(ERROR("SIGKILL"))

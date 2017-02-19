@@ -2,17 +2,19 @@ import glob
 import readline
 import rlcompleter
 import atexit
-
+import sys
 
 class AtrophyCompleter(rlcompleter.Completer):
-     def __init__(self,cmdcomplete):
+     def __init__(self,cmdcomplete,init_flag=True):
         self.text = ""
         self.matches = []
         self.cmdcomplete = cmdcomplete
         self.symbols = []
         self.index = 0
 
-        self.session_delim = "#! Session Started !#"
+        self.cleanup_flag = True 
+        self.init_flag = init_flag
+        self.session_start_index = 0
 
         self.HISTLEN = 2000
         self.HISTFILE = ".atrophy-history"
@@ -31,48 +33,24 @@ class AtrophyCompleter(rlcompleter.Completer):
         # (e.g. breakpoints, mem writes, comments)
         self.project_cmds = [ "sd", "b", "db", "sb","#", "//" ]
 
-        readline.set_history_length(self.HISTLEN)
 
-        try:
-            readline.read_history_file(self.HISTFILE)
-            readline.add_history(self.session_delim)
-        except Exception as e:
-            print e
+        if self.init_flag == True:
+            self.init_flag = False
+            try:
+                readline.read_history_file(self.HISTFILE)
+                self.session_start_index = readline.get_current_history_length()
+                readline.set_history_length(self.HISTLEN)
+            except Exception as e:
+                pass
 
-        atexit.register(self.on_exit,self.HISTFILE)
+            atexit.register(self.on_exit,self.HISTFILE)
 
      def on_exit(self,histfile):
-        # append last 'run'/'attach' to end for convieniance
-        length = readline.get_current_history_length()
-        tmp = []
-        last_run = ""
-
-    
-        if length > self.HISTLEN:
-            upper = length
-            lower = length-self.HISTLEN
-        else:
-            upper = length
-            lower = 0
-        
-        for i in range(lower,upper):
-            tmp.append(readline.get_history_item(i)) 
-
-        readline.clear_history()
-
-        for i in range(1,self.HISTLEN-1):
-            try:
-                line = tmp[i]
-            except:
-                break
-            readline.add_history(line)
-
-            if line.startswith("run") or line.startswith("attach"): 
-                last_run = line 
-              
-        if last_run:
-            readline.add_history(last_run) 
-        readline.write_history_file(histfile)
+        if self.cleanup_flag == True:
+            self.cleanup_flag = False
+            readline.set_history_length(self.HISTLEN)
+            readline.write_history_file(histfile)
+          
         
      def print_history(self,count=0):
         buf = ""
@@ -92,7 +70,8 @@ class AtrophyCompleter(rlcompleter.Completer):
             try:
                 int(i)
             except:
-                self.symbols.append(i)
+                if i not in self.symbols:
+                    self.symbols.append(i)
 
      def complete(self,text,index):
         if text != self.text or not text:
@@ -120,8 +99,7 @@ class AtrophyCompleter(rlcompleter.Completer):
 
 
      def save_project(self,proj_name):
-        session_index = 0 
-        length = readline.get_current_history_length()
+        session_length = readline.get_current_history_length()
         
         project_file = ".atrophy-project-%s" % proj_name
         project_buff = ""
@@ -139,12 +117,8 @@ class AtrophyCompleter(rlcompleter.Completer):
             except: ## no file found
                 pass  
             
-        for i in range(length,0,-1):
+        for i in range(self.session_start_index,session_length,-1):
             buf = readline.get_history_item(i)
-
-            if buf == self.session_delim:
-                session_index = length - i 
-                break
 
             if buf:
                 cmd = buf.split(" ")[0]

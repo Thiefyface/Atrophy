@@ -5,4 +5,4 @@ defines/*.pyc
 external/capstone-3.0.4
 external/keystone-0.9.1
 .atrophy-history
-.gdb-history
+.gdb_history
