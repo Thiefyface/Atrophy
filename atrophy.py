@@ -707,6 +707,13 @@ class Atrophy(object):
         
 ##########################        
     def setBreak(self,addr,comment=True):
+        try:
+            if self.break_dict[addr] > -1:
+                self.output(INFO("Already a breakpoint there."))
+                return
+        except:
+            pass
+
         if comment:
             try:
                 instr = self.disassemble(addr,1,False)[0]
@@ -732,14 +739,9 @@ class Atrophy(object):
 
 ##########################        
     def delBreak(self,addr):
-        addr = self.filter_addr(addr)
-        self.output(repr(self.break_dict[addr]))
-        try:
-            self.setMem(addr,self.break_dict[addr])
-            self.break_dict[addr] = -1
-        except IndexError:
-            self.output(WARN("Break not found"))
-            pass
+        self.setMem(addr,self.break_dict[addr])
+        self.break_dict[addr] = -1
+        self.output("Deleted Break @%s" % addr)
           
 ##########################        
     def disassemble(self,addr=None,count=10,verbose=True):
@@ -768,7 +770,6 @@ class Atrophy(object):
                 break
             
             tmp_dis = self.AsmUtil.disassemble(tmp,addr) 
-
 
             disasm_list += tmp_dis
 

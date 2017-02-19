@@ -166,7 +166,11 @@ class AsmUtil():
         if not content or not address:
             return
         try:  
-            # we get here...
+            # No dups, yo
+            for comment in self.comments[address]:
+                if content.find(comment) > 0:
+                    return
+
             if not content in self.comments[address]: 
                 if prepend:
                     self.comments[address].insert(content,0)
