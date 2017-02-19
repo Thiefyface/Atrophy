@@ -317,7 +317,6 @@ class EmuUtil():
         loop_stack = [[0,[]]] # bottom of stack, always the same 
         state = 0  # 0 == no loop, 1 == loop
 
-         
     def segfault_hook(self,emulator,access,address,size,value,user_data):
         '''
         uni_dict = self.regStruct.get_uni_regs()

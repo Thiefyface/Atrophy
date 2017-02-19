@@ -111,6 +111,7 @@ class Atrophy(object):
             self.EmuUtil = EmuUtil() 
             # so disasm can be commented from emu (jump taken/rets/etc)
             self.EmuUtil.init_commenting_function(self.AsmUtil.emu_append_comment)
+
         except Exception as e:
             self.output(str(e))
             self.output("Could not load Unicorn Engine, Emulation features disabled")
@@ -705,16 +706,6 @@ class Atrophy(object):
         
 ##########################        
     def setBreak(self,addr,comment=True):
-        addr = self.filter_addr(addr)
-        m = self.proc_map.find_region(addr) 
-        
-        if addr == -1 or not m:
-            self.output(WARN("Invalid Break Address") )
-            return
-
-        if "x" not in m.permissions:
-            self.output(INFO("Breakpoint on non-executable address"))
-
         if comment:
             try:
                 instr = self.disassemble(addr,1,False)[0]
@@ -726,8 +717,6 @@ class Atrophy(object):
 
         self.break_dict[addr] = ord(self.getByte(addr)) 
         self.setMem(addr,0xcc)
-
-
          
 ##########################        
     def listBreak(self):
@@ -947,7 +936,6 @@ class Atrophy(object):
 
     def bb_dump(self):
         self.EmuUtil.bb_dump()
-
 
 ##########################        
     def switchThread(self,tid):
