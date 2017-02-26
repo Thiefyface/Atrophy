@@ -1232,6 +1232,7 @@ class Atrophy(object):
                 elif stopsig == 9: 
                     self.output(ERROR("SIGKILL"))
                     self.output(self._print_regs())
+                
                 elif stopsig == 19:
                     #stop due to sys?idk
                     if self.sysflag:
@@ -1242,12 +1243,16 @@ class Atrophy(object):
                     return
 
                 # 5 => SIGTRAP
-                elif stopsig == 5:
+                elif stopsig == 5 or stopsig == 19:
+                    if self.sysflag:
+                        self.sendCommand("sys")
+                        self.sysflag = False
+                        return
+
                     # If we get here, generally something we set,
                     # need to distinguish if it's a breakpoint,
                     # or a PTRACE_O_* options being hit
                     #self.output(INFO("SIGTRAP instruction executed"))
-                    
                     
                     # First check if it's a valid breakpoint
                     t = self._find_thread(pid)
@@ -1257,19 +1262,42 @@ class Atrophy(object):
 
                     # Flag for valid breakpoint or not
                     break_p = False
+                    print self.break_dict
+                    
+                    for addr_str in self.break_dict:
+                        # since addr is now a string >_>
+                        try:
+                            addr_int = int(addr_str,16)
+                        except:
+                            addr_int = self.filter_addr(addr_str) 
+                         
+                        print "addr_str: %s " % addr_str
+                        print "addr_int: " 
+                        print addr_int
 
-                    for addr in self.break_dict:
-                        if instr_ptr == addr:
+                        if instr_ptr == addr_int:
+                            print "FUCING DERP"
                             try:
                                 _,sym,off = self.findNearestSymbol(instr_ptr,reloc=True)
                             except:
-                                _,sym,off = self.findNearestSymbol(instr_ptr,reloc=False)
-                            t = self._find_thread(pid)
-                            self.output(GOOD("Breakpoint Detected\nInstr:0x%x %s<%s+%d>" % (instr_ptr,PURPLE,sym,off)))
+                                try:
+                                    _,sym,off = self.findNearestSymbol(instr_ptr,reloc=False)
+                                except:
+                                    sym,off = None,None
+                                    pass
+
+                            if sym: 
+                                self.output(GOOD("Breakpoint Detected\nInstr:0x%x %s<%s+%d>" % (instr_ptr,PURPLE,sym,off)))
+                            else:
+                                self.output(GOOD("Breakpoint Detected\nInstr:0x%x" % (instr_ptr)))
                             # Restore break after moving on
-                            self.break_restore_loc = addr
+                            self.break_restore_loc = addr_int
                             # restore instruction 
-                            self.setMem(instr_ptr,self.break_dict[instr_ptr]) 
+                            try:
+                                self.setMem(instr_ptr,self.break_dict[instr_ptr]) 
+                            except:
+                                self.setMem(instr_ptr,self.break_dict[addr_str]) 
+                                
                             # rewind eip by 1 for "\xcc" 
                             self._set_reg(self.instr_reg,instr_ptr)
                             break_p = True
