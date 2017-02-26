@@ -49,7 +49,6 @@ except Exception as e:
 # 64-Bit issues
 #  - x64 backtrace 
 # Feature Wishlist
-#  - string dereferencing 
 #  - Hardware/Guard breaks
 #  - Heap dumping
 #  - Rop gadgets
@@ -93,8 +92,6 @@ class Atrophy(object):
                 self.output(ERROR("Unable to connect to %s:%d"%(rhost,rport)))
                 sys.exit(1)
 
-
-
         # since this relies on capstone/keystone/unicorn
         self.AsmUtil = False
         self.EmuUtil = False
@@ -125,6 +122,8 @@ class Atrophy(object):
             self.instr_reg = "rip"
             self.stack_reg = "rsp"
             self.bot_reg = "rbp"
+
+        self.next_flag = False
 
         self.sig_handlers = {}
         self.sig_actions = {
@@ -185,7 +184,6 @@ class Atrophy(object):
                      "sr":self._set_reg,
                      "bt":self.backtrace,
                      "die":self.die,
-                     #"s":self.step,
                      "c":self.cont,
                      "stop":self.stop,
                      "b":self.setBreak,
@@ -193,7 +191,8 @@ class Atrophy(object):
                      "db":self.delBreak,
                      "sw":self.switchThread, # not implemented yet 
                      "clear":self.clear,
-                     "si":self.stepInstruction,
+                     "s":self.stepInstruction,
+                     "n":self.nextInstruction,
                      "dis":self.pp_disassemble,
                      "asm":self.assemble,
                      "sys":self.syscall,
@@ -415,7 +414,7 @@ class Atrophy(object):
 ##########################        
     def setMem(self,addr,new_val):
         ptval = PTRACE_POKETEXT
-        #print "SETMEM: addr:%s new_val:%s" % (addr,new_val)
+        #print "SETMEM: addr:%s new_val:%s" % (addr,repr(new_val))
         n = True   #can still pass without n being set
         addr = self.filter_addr(addr)
         byteStr = self.filter_val(new_val)
@@ -653,31 +652,78 @@ class Atrophy(object):
         if not quiet:
             try:
                 # no disassembly
-                self.pp_disassemble(count=2)
+                self.pp_disassemble(count=1)
             except:
                 self.output(self.printRegs(self.instr_reg))
 
         # so we don't loop
         if not break_restore: 
             self.break_restore_check()            
-        
+
 
 ##########################        
-    def break_restore_check(self):
-        if self.break_restore_loc != None:
+    def nextInstruction(self):
+        # ignore _pp_syscall
+        self.next_flag = True
+
+        call_instr = [ "\xe8" ]
+        # check next instruction for "call"
+              
+        t = self.current_thread
+        addr = t.regStruct.get_register(self.instr_reg)
+        tmp = bytes(self.getMem(addr,count=1,quiet=False)) 
+
+        if tmp in call_instr:
+            disasm_list = self.disassemble(addr,2,verbose=False) # get len of instr
+            instr_len = len(disasm_list[0][3]) # (addr,mnem,op_str,bytes)
+            old_byte = ord(self.getMem(addr+instr_len,count=1,quiet=False))  # save old byte
+
+            self.setMem(addr+instr_len,0xcc) # set break
+            self.cont(update_regs=True) 
+            self.wait_child()
+            self.setMem(addr+instr_len,old_byte) # rem break
+
+            # heuristics? break isn't getting rolled back when hit...
+            self._set_reg(self.instr_reg,addr+instr_len)
+            self.pp_disassemble(count=1,verbose=False)
+        else:
+            self.stepInstruction(quiet=False)
+        
+        # ignore _pp_syscall
+        self.next_flag = False 
+
+##########################        
+    def break_restore_check(self,instr_ptr=None):
+        # 'next' instr gets wonky if we don't 
+        # verify that our breaks are in the dict
+        # since we sidestep that shit w/next
+        dict_check = True
+        if instr_ptr:
+            dict_check = False
+            for addr in self.break_dict:
+                addr_val = self.filter_addr(addr)
+                if addr == instr_ptr:
+                    dict_check = True
+                    break 
+        
+        if self.break_restore_loc != None and dict_check == True:
             self.stepInstruction(quiet=True,break_restore=True)
             # restore soft break
-            #self.output("Restoring 0x%08x" % addr)
+            self.output("Restoring 0x%x" % self.break_restore_loc)
             self.setBreak(self.break_restore_loc,comment=False)
             self.break_restore_loc = None
 
 ##########################        
     def cont(self,update_regs=True,systrace=False):
-        self.break_restore_check()
        
         pid = self.debug_pid
         if update_regs:
             self._update_regs(pid)
+
+        t = self.current_thread
+        addr = t.regStruct.get_register(self.instr_reg)
+        self.break_restore_check(addr)
+
         #clear status flags if any
         #self.output(INFO("Resuming execution..."))
         if systrace:
@@ -721,6 +767,7 @@ class Atrophy(object):
                 self.add_comment("%s"%(asm_str),"%s"%addr)
             except Exception as e:
                 print "setBreak " + str(e)
+                return
 
         self.break_dict[addr] = ord(self.getByte(addr)) 
         self.setMem(addr,0xcc)
@@ -738,10 +785,11 @@ class Atrophy(object):
                     print "listBreak " + str(e)
 
 ##########################        
-    def delBreak(self,addr):
+    def delBreak(self,addr,quiet=False):
         self.setMem(addr,self.break_dict[addr])
         self.break_dict[addr] = -1
-        self.output("Deleted Break @%s" % addr)
+        if not quiet:
+            self.output("Deleted Break @%s" % addr)
           
 ##########################        
     def disassemble(self,addr=None,count=10,verbose=True):
@@ -805,7 +853,7 @@ class Atrophy(object):
         return disasm_list
 
 
-    def pp_disassemble(self,addr=None,count=10):
+    def pp_disassemble(self,addr=None,count=10,verbose=True):
         off = 0xffffffff
         sym = ""
 
@@ -825,7 +873,7 @@ class Atrophy(object):
                 self.output(WARN("Invalid instruction count given"))
                 return ""
        
-        disasm_list = self.disassemble(addr,count)
+        disasm_list = self.disassemble(addr,count,verbose)
 
         # disasm_list[0][0] == addr of first address
         try:
@@ -1081,6 +1129,7 @@ class Atrophy(object):
                 except KeyboardInterrupt:
                     self.output("\n%s" % WARN("CTRL-C detected, breaking..."))
                     self.stop() 
+                    self._update_regs()
                     skip = False
                     loop = True
                 continue
@@ -1200,6 +1249,7 @@ class Atrophy(object):
 
             #######STOPPED ## Lots of logic here, since we'll be hitting this most 
             elif os.WIFSTOPPED(self.status.value):
+                #print repr(self.status.value) 
                 self._update_regs()
 
                 # case only occurs on first stop
@@ -1209,7 +1259,7 @@ class Atrophy(object):
                     return
     
                 stopsig = os.WSTOPSIG(self.status.value) 
-
+                #print "stopsig: 0x%s" % repr(stopsig)
                 
                 # Defined as CTRL-C
                 if stopsig == SIGUSR1:
@@ -1262,7 +1312,6 @@ class Atrophy(object):
 
                     # Flag for valid breakpoint or not
                     break_p = False
-                    print self.break_dict
                     
                     for addr_str in self.break_dict:
                         # since addr is now a string >_>
@@ -1302,7 +1351,7 @@ class Atrophy(object):
                     # WIFSTOPPED(s) && WSTOPSIG == SIGTRAP | 0x80 => syscall
                     # but above doesn't work? 
                     # assume: SIGTRAP and not breakpoint => syscall
-                    if not break_p:
+                    if not break_p and not self.next_flag:
                         # at this point, orig_eax == syscallnum 
                         t = self._find_thread(pid)
                         #syscall_num= t.regStruct.get_register("orig_eax")

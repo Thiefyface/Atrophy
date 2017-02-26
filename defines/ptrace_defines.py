@@ -216,6 +216,7 @@ def disasm_format(dis_list):
         buf += "%s0x%x: " % (GREEN,addr)
         buf += "%s%s " % (YELLOW,mnem)
         buf += "%s%s" % (CYAN,op) 
+        #buf += "   %s%s" % (YELLOW,byteStr)
         buf += "\n"
     return buf
 

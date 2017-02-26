@@ -107,8 +107,10 @@ class ProcMap(object):
             #print filtered[-1]
             self.memory_map.append(MemRegion(lowerbound,upperbound,perms,filtered))  
 
-        
-        self.base_relocation = self.memory_map[0].lowerbound
+        try: 
+            self.base_relocation = self.memory_map[0].lowerbound
+        except:
+            pass
         #print "BASE RELOC: 0x%x" % self.base_relocation
 
 
