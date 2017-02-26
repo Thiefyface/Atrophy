@@ -1271,12 +1271,7 @@ class Atrophy(object):
                         except:
                             addr_int = self.filter_addr(addr_str) 
                          
-                        print "addr_str: %s " % addr_str
-                        print "addr_int: " 
-                        print addr_int
-
                         if instr_ptr == addr_int:
-                            print "FUCING DERP"
                             try:
                                 _,sym,off = self.findNearestSymbol(instr_ptr,reloc=True)
                             except:
