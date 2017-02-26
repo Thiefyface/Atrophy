@@ -145,9 +145,10 @@ def save_symbol(symbol_dict,str_table,sym,dyn=False):
         
     ## the st_name field isn't always 100% at begin?
     end_nullbyte = str_table[st_name:].find('\x00')
-    begin_nullbyte = str_table[:st_name].rfind("\x00")
+    #begin_nullbyte = str_table[:st_name].rfind("\x00")
+    #symbol_string = str_table[begin_nullbyte+1:st_name+end_nullbyte]
+    symbol_string= str_table[st_name:st_name+end_nullbyte]
 
-    symbol_string = str_table[begin_nullbyte+1:st_name+end_nullbyte]
     
     if symbol_string and DEBUG:
         print "SYM: %s NAME: %s" % (str(sym),symbol_string)
