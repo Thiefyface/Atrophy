@@ -194,6 +194,7 @@ class Atrophy(object):
                      "s":self.stepInstruction,
                      "n":self.nextInstruction,
                      "dis":self.pp_disassemble,
+                     "disb":self.pp_disassemble_str,
                      "asm":self.assemble,
                      "sys":self.syscall,
                      "gs":self.getString,
@@ -851,6 +852,31 @@ class Atrophy(object):
             self.cmd_count += 1
 
         return disasm_list
+
+    def pp_disassemble_str(self,bytestr=""):
+        off = 0x0
+        if not self.AsmUtil:
+            self.output(WARN("Asm Utils disabled. Keystone/capstone installed?"))
+            return
+        
+        try:
+            tmp = filter(None,bytestr.split("\\x"))
+        except:
+            tmp = filter(None,bytestr.split(" "))
+        dis_list = "".join([chr(int(i,16)) for i in tmp]) 
+        
+        try:
+            disasm_list = self.AsmUtil.disassemble(dis_list,off) 
+        except Exception as e:
+            print e
+
+        if len(disasm_list):
+            try:
+                self.output(disasm_format(disasm_list)+"\n") 
+            except:
+                # incase we couldn't actually disassemble...
+                return disasm_list
+         
 
 
     def pp_disassemble(self,addr=None,count=10,verbose=True):
